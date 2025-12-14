@@ -32,6 +32,22 @@ enum Seniority {
   PRINCIPAL
 }
 
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  FREELANCE
+}
+
+enum CompanySize {
+  STARTUP
+  SMALL
+  MEDIUM
+  LARGE
+  ENTERPRISE
+}
+
 enum ApplicationStatus {
   FOUND
   NOTIFIED
@@ -107,10 +123,12 @@ model UserPreference {
   userId          String          @unique
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  targetRole      String
+  targetRoles     String[]
   targetLocations String[]
   experienceLevel ExperienceLevel
-  workType        WorkType
+  workTypes       WorkType[]
+  employmentTypes EmploymentType[]
+  companySizes    CompanySize[]
 
   salaryMin       Int?
   salaryMax       Int?
