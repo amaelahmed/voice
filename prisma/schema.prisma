@@ -36,8 +36,15 @@ enum ApplicationStatus {
   FOUND
   NOTIFIED
   APPROVED
+  QUEUED_FOR_SUBMISSION
   SUBMITTED
   SKIPPED
+}
+
+enum MatchScoreStatus {
+  PENDING
+  READY_FOR_REVIEW
+  ARCHIVED
 }
 
 model ExperienceLevelPreset {
@@ -157,18 +164,23 @@ model JobListing {
 }
 
 model MatchScore {
-  id           String   @id @default(uuid())
-  createdAt    DateTime @default(now())
+  id           String              @id @default(uuid())
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   jobListingId String
-  jobListing   JobListing @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
+  jobListing   JobListing          @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
 
   score        Float
-  explanation  String   @db.Text
+  explanation  String              @db.Text
   llmModel     String
+  status       MatchScoreStatus    @default(PENDING)
+
+  telegramMessageId String?
+  telegramMessageTs DateTime?
 
   @@unique([userId, jobListingId])
   @@index([jobListingId])
