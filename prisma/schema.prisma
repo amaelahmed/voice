@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  parsedCvs   ParsedCv[]
+  events      ApplicationEvent[]
+
+  @@map("users")
+}
+
+// CV Document - stores the uploaded file metadata
+model CvDocument {
+  id            String     @id @default(cuid())
+  userId        String
+  fileName      String
+  fileSize      Int
+  mimeType      String
+  storageUrl    String     // URL to the stored file (S3, Supabase, etc.)
+  uploadedAt    DateTime   @default(now())
+  isEncrypted   Boolean    @default(true)
+  virusScanUrl  String?    // URL/reference to virus scan result
+  metadataHash  String?    // Hash of encrypted metadata for compliance
+
+  parsedCv      ParsedCv?
+  events        ApplicationEvent[]
+
+  @@map("cv_documents")
+}
+
+// Parsed CV - stores extracted/parsed data from CV
+model ParsedCv {
+  id              String          @id @default(cuid())
+  cvDocumentId    String          @unique
+  cvDocument      CvDocument      @relation(fields: [cvDocumentId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Extracted fields
+  headline        String?         // e.g., "Senior Software Engineer"
+  summary         String?         // Professional summary
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  parsingStatus   ParsingStatus   @default(PENDING)
+  parsingError    String?         // Error message if parsing failed
+
+  experiences     Experience[]
+  skills          Skill[]
+  educations      Education[]
+  events          ApplicationEvent[]
+
+  @@map("parsed_cvs")
+}
+
+enum ParsingStatus {
+  PENDING
+  IN_PROGRESS
+  SUCCESS
+  FAILED
+}
+
+// Experience entries extracted from CV
+model Experience {
+  id            String    @id @default(cuid())
+  parsedCvId    String
+  parsedCv      ParsedCv  @relation(fields: [parsedCvId], references: [id], onDelete: Cascade)
+
+  jobTitle      String
+  company       String
+  location      String?
+  startDate     DateTime?
+  endDate       DateTime?
+  current       Boolean   @default(false)
+  description   String?
+
+  createdAt     DateTime  @default(now())
+
+  @@map("experiences")
+}
+
+// Skills extracted from CV
+model Skill {
+  id            String    @id @default(cuid())
+  parsedCvId    String
+  parsedCv      ParsedCv  @relation(fields: [parsedCvId], references: [id], onDelete: Cascade)
+
+  name          String
+  proficiency   String?   // e.g., "Expert", "Intermediate", "Beginner"
+
+  createdAt     DateTime  @default(now())
+
+  @@map("skills")
+}
+
+// Education entries extracted from CV
+model Education {
+  id            String    @id @default(cuid())
+  parsedCvId    String
+  parsedCv      ParsedCv  @relation(fields: [parsedCvId], references: [id], onDelete: Cascade)
+
+  degree        String    // e.g., "Bachelor of Science"
+  fieldOfStudy  String?   // e.g., "Computer Science"
+  school        String    // University name
+  startDate     DateTime?
+  endDate       DateTime?
+  activities    String?   // Clubs, societies, etc.
+
+  createdAt     DateTime  @default(now())
+
+  @@map("educations")
+}
+
+// Application Event - audit log for all operations
+model ApplicationEvent {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventType     String    // e.g., "CV_UPLOADED", "CV_PARSED", "CV_DELETED", "PARSING_FAILED"
+  entityType    String    // e.g., "CvDocument", "ParsedCv"
+  entityId      String?   // ID of the affected entity
+  
+  cvDocumentId  String?
+  cvDocument    CvDocument? @relation(fields: [cvDocumentId], references: [id], onDelete: SetNull)
+  
+  parsedCvId   String?
+  parsedCv      ParsedCv? @relation(fields: [parsedCvId], references: [id], onDelete: SetNull)
+
+  details       String?   // JSON or text details about the event
+  createdAt     DateTime  @default(now())
+
+  @@map("application_events")
+}
