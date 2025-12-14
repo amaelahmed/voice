@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Preferences
+  roleKeyword String?
+  location    String?
+
+  parsedCv ParsedCv?
+  matches  MatchScore[]
+}
+
+model ParsedCv {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  content   String // Text content of the CV
+  skills    String // JSON string or comma separated
+  experience String? // Summary
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model JobSource {
+  id        String       @id @default(cuid())
+  name      String       @unique // e.g. "Greenhouse", "Lever", or Company Name
+  type      String       @default("GENERIC") // GREENHOUSE, LEVER, GENERIC
+  baseUrl   String?
+  jobs      JobListing[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model JobListing {
+  id          String   @id @default(cuid())
+  externalId  String
+  url         String   @unique
+  title       String
+  company     String
+  location    String?
+  description String?
+  postedAt    DateTime?
+  scrapedAt   DateTime @default(now())
+
+  sourceId String
+  source   JobSource @relation(fields: [sourceId], references: [id])
+
+  matches MatchScore[]
+
+  @@unique([sourceId, externalId])
+}
+
+model MatchScore {
+  id        String   @id @default(cuid())
+  score     Float // 0-1
+  rationale String?
+  status    String   @default("PENDING") // PENDING, READY_FOR_REVIEW, REJECTED, APPLIED
+
+  jobId String
+  job   JobListing @relation(fields: [jobId], references: [id])
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jobId])
+}
