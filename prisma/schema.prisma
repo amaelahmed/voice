@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExperienceLevel {
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  STAFF
+  PRINCIPAL
+}
+
+enum WorkType {
+  ONSITE
+  HYBRID
+  REMOTE
+}
+
+enum Seniority {
+  INTERN
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  STAFF
+  PRINCIPAL
+}
+
+enum ApplicationStatus {
+  FOUND
+  NOTIFIED
+  APPROVED
+  SUBMITTED
+  SKIPPED
+}
+
+model ExperienceLevelPreset {
+  level     ExperienceLevel @id
+  sortOrder Int
+}
+
+model User {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  email         String?  @unique
+  telegramUserId String? @unique
+
+  cvDocuments       CvDocument[]
+  parsedCvs         ParsedCv[]
+  preference        UserPreference?
+  matchScores       MatchScore[]
+  applicationEvents ApplicationEvent[]
+}
+
+model CvDocument {
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  originalFileName String
+  mimeType         String?
+  sizeBytes        Int?
+
+  storageProvider  String   @default("s3")
+  storageKey       String
+  checksumSha256   String
+
+  parsedCv         ParsedCv?
+
+  @@index([userId])
+  @@unique([userId, checksumSha256])
+}
+
+model ParsedCv {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  cvDocumentId String   @unique
+  cvDocument   CvDocument @relation(fields: [cvDocumentId], references: [id], onDelete: Cascade)
+
+  profile      Json
+  skills       Json
+  rawText      String?  @db.Text
+
+  @@index([userId])
+}
+
+model UserPreference {
+  id              String          @id @default(uuid())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  userId          String          @unique
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  targetRole      String
+  targetLocations String[]
+  experienceLevel ExperienceLevel
+  workType        WorkType
+
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String?         @default("USD")
+}
+
+model JobSource {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  name         String   @unique
+  baseUrl      String
+  metadata     Json?
+  lastScrapedAt DateTime?
+  isActive     Boolean  @default(true)
+
+  jobListings  JobListing[]
+}
+
+model JobListing {
+  id            String   @id @default(uuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  jobSourceId   String
+  jobSource     JobSource @relation(fields: [jobSourceId], references: [id], onDelete: Restrict)
+
+  externalId    String?
+  url           String?
+
+  title         String
+  company       String
+  location      String?
+  seniority     Seniority?
+  rawDescription String @db.Text
+  publishedAt   DateTime?
+
+  matchScores       MatchScore[]
+  applicationEvents ApplicationEvent[]
+
+  @@index([jobSourceId])
+  @@unique([jobSourceId, externalId])
+}
+
+model MatchScore {
+  id           String   @id @default(uuid())
+  createdAt    DateTime @default(now())
+
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobListingId String
+  jobListing   JobListing @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
+
+  score        Float
+  explanation  String   @db.Text
+  llmModel     String
+
+  @@unique([userId, jobListingId])
+  @@index([jobListingId])
+}
+
+model ApplicationEvent {
+  id           String            @id @default(uuid())
+  createdAt    DateTime          @default(now())
+
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  jobListingId String
+  jobListing   JobListing        @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
+
+  status       ApplicationStatus
+  note         String?           @db.Text
+
+  @@index([userId, jobListingId, createdAt])
+}
