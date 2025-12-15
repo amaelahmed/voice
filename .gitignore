@@ -29,6 +29,11 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# database
+*.db
+*.sqlite
+*.sqlite3
+
 # editor directories and files
 .idea
 .vscode
