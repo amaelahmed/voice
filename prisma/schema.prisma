@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -110,7 +110,7 @@ model ParsedCv {
 
   profile      Json
   skills       Json
-  rawText      String?  @db.Text
+  rawText      String?
 
   @@index([userId])
 }
@@ -123,12 +123,12 @@ model UserPreference {
   userId          String          @unique
   user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  targetRoles     String[]
-  targetLocations String[]
+  targetRoles     Json
+  targetLocations Json
   experienceLevel ExperienceLevel
-  workTypes       WorkType[]
-  employmentTypes EmploymentType[]
-  companySizes    CompanySize[]
+  workTypes       Json
+  employmentTypes Json
+  companySizes    Json
 
   salaryMin       Int?
   salaryMax       Int?
@@ -164,7 +164,7 @@ model JobListing {
   company       String
   location      String?
   seniority     Seniority?
-  rawDescription String @db.Text
+  rawDescription String
   publishedAt   DateTime?
 
   matchScores       MatchScore[]
@@ -185,7 +185,7 @@ model MatchScore {
   jobListing   JobListing @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
 
   score        Float
-  explanation  String   @db.Text
+  explanation  String
   llmModel     String
 
   @@unique([userId, jobListingId])
@@ -203,7 +203,7 @@ model ApplicationEvent {
   jobListing   JobListing        @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
 
   status       ApplicationStatus
-  note         String?           @db.Text
+  note         String?
 
   @@index([userId, jobListingId, createdAt])
 }

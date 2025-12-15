@@ -37,3 +37,7 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# sqlite (tests/dev)
+*.db
+*.db-journal

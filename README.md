@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node.js (recommended: 20+)
-- PostgreSQL (14+)
+- SQLite (via Prisma)
 
 ## Environment variables
 
@@ -16,8 +16,8 @@ cp .env.example .env.local
 
 ### Required
 
-- `DATABASE_URL` – PostgreSQL connection string used by Prisma.
-  - Example: `postgresql://postgres:postgres@localhost:5432/nextjs?schema=public`
+- `DATABASE_URL` – SQLite database URL used by Prisma.
+  - Example: `file:./dev.db`
 - `OPENAI_API_KEY` – used for CV parsing/matching via OpenAI.
 - `TELEGRAM_BOT_TOKEN` – used for Telegram notifications.
 - `STORAGE_BUCKET` – storage bucket name for CV uploads (S3 or S3-compatible).
@@ -26,13 +26,9 @@ Notes:
 - Prisma CLI reads `.env` by default.
 - Next.js reads `.env.local` (and `.env`). Keeping them in sync avoids surprises.
 
-## Database (Prisma + PostgreSQL)
+## Database (Prisma + SQLite)
 
 This project uses Prisma for the data layer. The schema lives in `prisma/schema.prisma`.
-
-### Create the database
-
-Make sure the database in your `DATABASE_URL` exists (Prisma migrations create tables, not the database itself).
 
 ### Create tables
 
