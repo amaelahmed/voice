@@ -1,4 +1,6 @@
-import { prisma } from "./db";
+import type { Prisma } from "@prisma/client";
+
+import { prisma } from "@/lib/db";
 
 export type EventType =
   | "CV_UPLOADED"
@@ -17,12 +19,9 @@ export interface LogEventOptions {
   entityId?: string;
   cvDocumentId?: string;
   parsedCvId?: string;
-  details?: Record<string, unknown>;
+  details?: Prisma.InputJsonValue;
 }
 
-/**
- * Log an application event for audit trail
- */
 export async function logEvent(options: LogEventOptions): Promise<void> {
   try {
     await prisma.applicationEvent.create({
@@ -33,31 +32,24 @@ export async function logEvent(options: LogEventOptions): Promise<void> {
         entityId: options.entityId,
         cvDocumentId: options.cvDocumentId,
         parsedCvId: options.parsedCvId,
-        details: options.details ? JSON.stringify(options.details) : null,
+        details: options.details,
       },
     });
   } catch (error) {
     console.error("Failed to log event:", error);
-    // Don't throw - logging failures shouldn't break the application
   }
 }
 
-/**
- * Get audit log for a user's CV operations
- */
 export async function getAuditLog(
   userId: string,
   options?: { cvDocumentId?: string; limit?: number }
 ) {
-  const where: Record<string, unknown> = { userId };
-  
-  if (options?.cvDocumentId) {
-    where.cvDocumentId = options.cvDocumentId;
-  }
-  
-  return await prisma.applicationEvent.findMany({
-    where,
+  return prisma.applicationEvent.findMany({
+    where: {
+      userId,
+      cvDocumentId: options?.cvDocumentId,
+    },
     orderBy: { createdAt: "desc" },
-    take: options?.limit || 50,
+    take: options?.limit ?? 50,
   });
 }

@@ -1,45 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+
 import { setSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, name } = await request.json();
+    const { email } = (await request.json()) as { email?: string };
 
     if (!email) {
-      return NextResponse.json(
-        { error: "Email is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
     }
 
-    // Find or create user
+    const normalizedEmail = email.trim().toLowerCase();
+
     let user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (!user) {
       user = await prisma.user.create({
-        data: {
-          email,
-          name: name || email.split("@")[0],
-        },
+        data: { email: normalizedEmail },
       });
     }
 
-    // Set session
     await setSession({
       userId: user.id,
-      email: user.email,
+      email: user.email ?? normalizedEmail,
     });
 
     return NextResponse.json({ success: true, user });
   } catch (error) {
     console.error("Login error:", error);
 
-    return NextResponse.json(
-      { error: "Login failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Login failed" }, { status: 500 });
   }
 }

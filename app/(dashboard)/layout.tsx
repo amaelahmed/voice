@@ -1,6 +1,7 @@
-import { ReactNode } from "react";
-import { getSession } from "@/lib/auth";
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+
+import { clearSession, getSession } from "@/lib/auth";
 
 export default async function DashboardLayout({
   children,
@@ -8,7 +9,7 @@ export default async function DashboardLayout({
   children: ReactNode;
 }) {
   const session = await getSession();
-  
+
   if (!session) {
     redirect("/auth/login");
   }
@@ -19,7 +20,7 @@ export default async function DashboardLayout({
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2">
             <h1 className="text-xl font-bold text-black dark:text-white">
-              CV Manager
+              Dashboard
             </h1>
           </div>
 
@@ -44,13 +45,8 @@ function LogoutButton() {
     <form
       action={async () => {
         "use server";
-        const res = await fetch(
-          `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth/logout`,
-          { method: "POST" }
-        );
-        if (res.ok) {
-          redirect("/auth/login");
-        }
+        await clearSession();
+        redirect("/auth/login");
       }}
     >
       <button

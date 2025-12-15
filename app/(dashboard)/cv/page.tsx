@@ -6,9 +6,11 @@ import clsx from "clsx";
 
 interface CvDocument {
   id: string;
-  fileName: string;
-  fileSize: number;
-  uploadedAt: string;
+  originalFileName: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  storageKey: string;
+  createdAt: string;
 }
 
 interface ParsedCvData {
@@ -42,7 +44,7 @@ interface ParsedCvData {
 
 interface ApiResponse {
   cvDocument: CvDocument;
-  parsedCv: ParsedCvData;
+  parsedCv: ParsedCvData | null;
 }
 
 export default function CvDashboard() {
@@ -64,8 +66,26 @@ export default function CvDashboard() {
       setLoading(true);
       const response = await fetch("/api/cv");
       if (response.ok) {
-        const data = await response.json();
-        setCvData(data.cvDocument);
+        const data = (await response.json()) as {
+          cvDocument: CvDocument | null;
+          parsedCv: ParsedCvData | null;
+        };
+
+        if (data.cvDocument) {
+          setCvData({
+            cvDocument: data.cvDocument,
+            parsedCv: data.parsedCv
+              ? {
+                  ...data.parsedCv,
+                  experiences: data.parsedCv.experiences ?? [],
+                  skills: data.parsedCv.skills ?? [],
+                  educations: data.parsedCv.educations ?? [],
+                }
+              : null,
+          });
+        } else {
+          setCvData(null);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch CV data:", error);
@@ -102,14 +122,35 @@ export default function CvDashboard() {
       clearInterval(progressInterval);
       setProgress(100);
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        cvDocument?: CvDocument;
+        parsedCv?: ParsedCvData | null;
+        error?: string;
+      };
 
       if (!response.ok) {
         setError(data.error || "Upload failed");
         return;
       }
 
-      setCvData(data);
+      if (data.error) {
+        setError(data.error);
+      }
+
+      if (data.cvDocument) {
+        setCvData({
+          cvDocument: data.cvDocument,
+          parsedCv: data.parsedCv
+            ? {
+                ...data.parsedCv,
+                experiences: data.parsedCv.experiences ?? [],
+                skills: data.parsedCv.skills ?? [],
+                educations: data.parsedCv.educations ?? [],
+              }
+            : null,
+        });
+      }
+
       setTimeout(() => setProgress(0), 500);
     } catch (error) {
       setError(
@@ -164,12 +205,22 @@ export default function CvDashboard() {
         body: JSON.stringify({ cvDocumentId: cvData.cvDocument.id }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as {
+        parsedCv?: ParsedCvData;
+        error?: string;
+      };
 
       if (response.ok && cvData) {
         setCvData({
           ...cvData,
-          parsedCv: data.parsedCv,
+          parsedCv: data.parsedCv
+            ? {
+                ...data.parsedCv,
+                experiences: data.parsedCv.experiences ?? [],
+                skills: data.parsedCv.skills ?? [],
+                educations: data.parsedCv.educations ?? [],
+              }
+            : null,
         });
       } else {
         setError(data.error || "Reparse failed");
@@ -250,14 +301,14 @@ export default function CvDashboard() {
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="font-semibold text-black dark:text-white">
-                  {cvData.cvDocument.fileName}
+                  {cvData.cvDocument.originalFileName}
                 </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   Uploaded on{" "}
-                  {new Date(cvData.cvDocument.uploadedAt).toLocaleDateString()}
+                  {new Date(cvData.cvDocument.createdAt).toLocaleDateString()}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {(cvData.cvDocument.fileSize / 1024).toFixed(1)} KB
+                  {((cvData.cvDocument.sizeBytes ?? 0) / 1024).toFixed(1)} KB
                 </p>
               </div>
 

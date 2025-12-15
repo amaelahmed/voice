@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+
 import { getSession } from "@/lib/auth";
+import { logEvent } from "@/lib/audit";
+import { parseCv } from "@/lib/cv-parser";
 import { prisma } from "@/lib/db";
 import { getFile } from "@/lib/storage";
-import { parseCv } from "@/lib/cv-parser";
-import { logEvent } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +13,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { cvDocumentId } = await request.json();
+    const { cvDocumentId } = (await request.json()) as {
+      cvDocumentId?: string;
+    };
 
     if (!cvDocumentId) {
       return NextResponse.json(
@@ -21,7 +24,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify ownership
     const cvDocument = await prisma.cvDocument.findUnique({
       where: { id: cvDocumentId },
     });
@@ -30,9 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Get the stored file
-    const fileId = cvDocument.storageUrl.split(":")[0];
-    const fileBuffer = await getFile(fileId);
+    const fileBuffer = await getFile(cvDocument.storageKey);
 
     if (!fileBuffer) {
       return NextResponse.json(
@@ -41,13 +41,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update parsing status to IN_PROGRESS
     await prisma.parsedCv.updateMany({
       where: { cvDocumentId },
       data: { parsingStatus: "IN_PROGRESS" },
     });
 
-    // Log retry attempt
     await logEvent({
       userId: session.userId,
       eventType: "PARSING_RETRIED",
@@ -56,74 +54,89 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      // Re-parse the CV
       const parsedData = await parseCv(
         fileBuffer,
-        cvDocument.fileName,
-        cvDocument.mimeType
+        cvDocument.originalFileName,
+        cvDocument.mimeType ?? "application/octet-stream"
       );
 
-      // Delete old parsed data
       await prisma.experience.deleteMany({
         where: {
           parsedCv: { cvDocumentId },
         },
       });
+
       await prisma.skill.deleteMany({
         where: {
           parsedCv: { cvDocumentId },
         },
       });
+
       await prisma.education.deleteMany({
         where: {
           parsedCv: { cvDocumentId },
         },
       });
 
-      // Update ParsedCv with new data
-      const parsedCv = await prisma.parsedCv.findFirst({
+      const existing = await prisma.parsedCv.findUnique({
         where: { cvDocumentId },
       });
 
-      if (!parsedCv) {
-        return NextResponse.json(
-          { error: "Parsed CV not found" },
-          { status: 404 }
-        );
-      }
+      const parsedCv = existing
+        ? await prisma.parsedCv.update({
+            where: { id: existing.id },
+            data: {
+              headline: parsedData.headline,
+              summary: parsedData.summary,
+              parsingStatus: "SUCCESS",
+              parsingError: null,
+              experiences: {
+                create: parsedData.experiences,
+              },
+              skills: {
+                create: parsedData.skills,
+              },
+              educations: {
+                create: parsedData.educations,
+              },
+            },
+            include: {
+              experiences: true,
+              skills: true,
+              educations: true,
+            },
+          })
+        : await prisma.parsedCv.create({
+            data: {
+              cvDocumentId,
+              userId: session.userId,
+              headline: parsedData.headline,
+              summary: parsedData.summary,
+              parsingStatus: "SUCCESS",
+              experiences: {
+                create: parsedData.experiences,
+              },
+              skills: {
+                create: parsedData.skills,
+              },
+              educations: {
+                create: parsedData.educations,
+              },
+            },
+            include: {
+              experiences: true,
+              skills: true,
+              educations: true,
+            },
+          });
 
-      const updated = await prisma.parsedCv.update({
-        where: { id: parsedCv.id },
-        data: {
-          headline: parsedData.headline,
-          summary: parsedData.summary,
-          parsingStatus: "SUCCESS",
-          parsingError: null,
-          experiences: {
-            create: parsedData.experiences,
-          },
-          skills: {
-            create: parsedData.skills,
-          },
-          educations: {
-            create: parsedData.educations,
-          },
-        },
-        include: {
-          experiences: true,
-          skills: true,
-          educations: true,
-        },
-      });
-
-      // Log successful re-parsing
       await logEvent({
         userId: session.userId,
         eventType: "CV_PARSED",
         entityType: "ParsedCv",
-        entityId: updated.id,
+        entityId: parsedCv.id,
         cvDocumentId,
-        parsedCvId: updated.id,
+        parsedCvId: parsedCv.id,
         details: {
           reparse: true,
           experienceCount: parsedData.experiences.length,
@@ -134,23 +147,21 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        parsedCv: updated,
+        parsedCv,
       });
     } catch (parseError) {
-      // Update with error status
+      const errorMessage =
+        parseError instanceof Error ? parseError.message : "Unknown parsing error";
+
       await prisma.parsedCv.updateMany({
         where: { cvDocumentId },
         data: {
           parsingStatus: "FAILED",
-          parsingError:
-            parseError instanceof Error
-              ? parseError.message
-              : "Unknown parsing error",
+          parsingError: errorMessage,
         },
       });
 
-      // Log failure
-      const parsedCv = await prisma.parsedCv.findFirst({
+      const parsedCv = await prisma.parsedCv.findUnique({
         where: { cvDocumentId },
       });
 
@@ -163,20 +174,14 @@ export async function POST(request: NextRequest) {
         parsedCvId: parsedCv?.id,
         details: {
           reparse: true,
-          error:
-            parseError instanceof Error
-              ? parseError.message
-              : "Unknown error",
+          error: errorMessage,
         },
       });
 
       return NextResponse.json(
         {
           error: "Parsing failed",
-          details:
-            parseError instanceof Error
-              ? parseError.message
-              : "Unknown error",
+          details: errorMessage,
         },
         { status: 400 }
       );
@@ -187,8 +192,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to reparse CV",
-        details:
-          error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );

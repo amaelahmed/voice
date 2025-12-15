@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
 
-export async function middleware(request: NextRequest) {
-  // Check if accessing protected routes
-  if (request.nextUrl.pathname.startsWith("/(dashboard)") || request.nextUrl.pathname.startsWith("/dashboard")) {
-    const session = await getSession();
-    
-    if (!session) {
-      // Redirect to login or auth page
-      return NextResponse.redirect(new URL("/auth/login", request.url));
-    }
+function hasValidSessionCookie(request: NextRequest): boolean {
+  const value = request.cookies.get("session")?.value;
+  if (!value) return false;
+
+  try {
+    const decoded = JSON.parse(atob(value)) as { userId?: string; email?: string };
+    return Boolean(decoded.userId && decoded.email);
+  } catch {
+    return false;
   }
-  
+}
+
+export function middleware(request: NextRequest) {
+  if (!hasValidSessionCookie(request)) {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/(dashboard)/:path*", "/dashboard/:path*"],
+  matcher: ["/cv/:path*", "/preferences/:path*"],
 };

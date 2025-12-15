@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
@@ -27,7 +27,7 @@ export default function LoginPage() {
       }
 
       // Redirect to dashboard
-      router.push("/(dashboard)/cv");
+      router.push("/cv");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
